@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.agents
+.claude
+/generated/prisma
+.env
+.env.*
+.env.example
+!.env.example
+
