@@ -1,11 +1,5 @@
 import { Request, Response } from 'express';
-import {
-  GenerateContentConfig,
-  HarmBlockThreshold,
-  HarmCategory,
-} from '@google/genai';
 import Thumbnail from '../models/Thumbnail.js';
-import ai from '../configs/ai.js';
 import path from 'path';
 import fs from 'fs';
 import { v2 as cloudinary } from 'cloudinary';
@@ -42,6 +36,9 @@ const colorSchemeDescriptions = {
 };
 
 export const generateThumbnail = async (req: Request, res: Response) => {
+  let filePath: string | undefined;
+  let thumbnail: any = null;
+
   try {
     const { userId } = req.session;
 
@@ -54,108 +51,186 @@ export const generateThumbnail = async (req: Request, res: Response) => {
       text_overlay,
     } = req.body;
 
-    const thumbnail = await Thumbnail.create({
+    // Create the database record.
+    thumbnail = await Thumbnail.create({
       userId,
       title,
       prompt_used: user_prompt,
       user_prompt,
       style,
-      aspect_ratio,
+      aspect_ratio: aspect_ratio || '16:9',
       color_scheme,
       text_overlay,
       isGenerating: true,
     });
 
-    const model = 'gemini-3-pro-image-preview';
+    // Build the prompt using your existing style and color descriptions.
+    let prompt = `Create a professional YouTube thumbnail for: "${title}". `;
 
-    const generatingConfig: GenerateContentConfig = {
-      maxOutputTokens: 32768,
-      temperature: 1,
-      topP: 0.95,
-      responseModalities: ['image'],
-      imageConfig: {
-        aspectRatio: aspect_ratio || '16:9',
-        imageSize: '1k',
-      },
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.OFF,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.OFF,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.OFF,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.OFF,
-        },
-      ],
-    };
+    if (style && stylePrompts[style as keyof typeof stylePrompts]) {
+      prompt += stylePrompts[style as keyof typeof stylePrompts] + '. ';
+    }
 
-    let prompt = `Create a ${stylePrompts[style as keyof typeof stylePrompts]} for: "${title}" `;
+    // if (color_scheme) {
+    //   prompt += `Use a ${colorSchemeDescriptions[color_scheme as keyof typeof colorSchemeDescriptions]} color scheme.`;
+    // }
 
-    if (color_scheme) {
-      prompt += `Use a ${colorSchemeDescriptions[color_scheme as keyof typeof colorSchemeDescriptions]} color scheme.`;
+    if (
+      color_scheme &&
+      colorSchemeDescriptions[
+        color_scheme as keyof typeof colorSchemeDescriptions
+      ]
+    ) {
+      prompt += `Use this color scheme: ${
+        colorSchemeDescriptions[
+          color_scheme as keyof typeof colorSchemeDescriptions
+        ]
+      }. `;
     }
 
     if (user_prompt) {
       prompt += `Additional details: ${user_prompt}.`;
     }
 
-    prompt += ` Thu thumbnail should be ${aspect_ratio}, visually stunning, and designed to maximize click-through rate. Make it bold, professional, and impossible to ignore.`;
+    if (text_overlay) {
+      prompt += `Include this exact text in the thumbnail: ${text_overlay}. `;
+    }
+
+    prompt += `Make the thumbnail bold and professional,
+with a clear focal point, strong contrast, and readable composition.
+Aspect ratio: ${aspect_ratio || '16:9'}.`;
 
     //   Generate the image using the ai model
-    const response: any = await ai.models.generateContent({
-      model,
-      contents: [prompt],
-      config: generatingConfig,
+
+    const apiKey = process.env.POLLINATIONS_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({
+        message: 'Image generation is not configured.',
+      });
+    }
+
+    const url = new URL(
+      `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}`,
+    );
+
+    // Select an image model available to your API key.
+    url.searchParams.set('model', 'flux');
+
+    const dimensions: Record<string, [number, number]> = {
+      '16:9': [1280, 720],
+      '1:1': [1024, 1024],
+      '4:3': [1024, 768],
+      '3:2': [1200, 800],
+      '9:16': [720, 1280],
+    };
+
+    const ratio =
+      typeof aspect_ratio === 'string' && dimensions[aspect_ratio]
+        ? aspect_ratio
+        : '16:9';
+
+    const [width, height] = dimensions[ratio];
+
+    url.searchParams.set('width', String(width));
+    url.searchParams.set('height', String(height));
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: AbortSignal.timeout(120000),
     });
 
-    //   check if the response is valid
-    if (!response?.candidates?.[0]?.content?.parts) {
-      throw new Error('Unexpected response');
+    if (!response.ok) {
+      const details = await response.text();
+
+      console.error('Pollinations error:', response.status, details);
+
+      throw new Error(
+        `Pollinations API error (${response.status}): ${details}`,
+      );
     }
 
-    const parts = response.candidates[0].content.parts;
+    const contentType = response.headers.get('content-type') || '';
 
-    let finalBuffer: Buffer | null = null;
-
-    for (const part of parts) {
-      if (part.inlineData) {
-        finalBuffer = Buffer.from(part.inlineData.data, 'base64');
-      }
+    if (!contentType.startsWith('image/')) {
+      throw new Error('Pollinations did not return an image');
     }
 
-    const filename = `final-output-${Date.now()}.png`;
+    const finalBuffer = Buffer.from(await response.arrayBuffer());
 
-    const filePath = path.join('images', filename);
+    if (!finalBuffer.length) {
+      throw new Error('The generated image is empty');
+    }
+
+    // Choose a file extension matching the returned image.
+    const extensionByType: Record<string, string> = {
+      'image/png': '.png',
+      'image/jpeg': '.jpg',
+      'image/webp': '.webp',
+    };
+
+    const extension = extensionByType[contentType.split(';')[0]] || '.img';
+
+    const imageDirectory = path.join(process.cwd(), 'images');
 
     //   create the image directory if it doesn't exist
     fs.mkdirSync('images', { recursive: true });
 
-    //   Write the final image to the file
-    fs.writeFileSync(filePath, finalBuffer!);
+    fs.mkdirSync(imageDirectory, { recursive: true });
 
+    filePath = path.join(
+      imageDirectory,
+      `thumbnail-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}${extension}`,
+    );
+
+    fs.writeFileSync(filePath, finalBuffer);
+
+    // Upload the image to Cloudinary.
     const uploadResult = await cloudinary.uploader.upload(filePath, {
       resource_type: 'image',
     });
 
-    thumbnail.image_url = uploadResult.url;
+    // Update and save the thumbnail.
+    thumbnail.image_url = uploadResult.secure_url;
     thumbnail.isGenerating = false;
+
     await thumbnail.save();
 
-    res.status(201).json({ message: 'Thumbnail Generated', thumbnail });
+    return res.status(201).json({
+      message: 'Thumbnail generated successfully.',
+      thumbnail,
+    });
+  } catch (error: unknown) {
+    console.error('Thumbnail generation error:', error);
 
-    // remove image file from disk
-    fs.unlinkSync(filePath);
-  } catch (error: any) {
-    console.log(error);
-    return res.status(500).json({ message: error.message || 'Server Error!' });
+    if (thumbnail) {
+      try {
+        thumbnail.isGenerating = false;
+        await thumbnail.save();
+      } catch (saveError) {
+        console.error('Failed to update thumbnail status:', saveError);
+      }
+    }
+
+    return res.status(500).json({
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Server error while generating thumbnail.',
+    });
+  } finally {
+    // Remove the temporary file even if an operation fails.
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (cleanupError) {
+        console.error('Failed to remove temporary image:', cleanupError);
+      }
+    }
   }
 };
 
