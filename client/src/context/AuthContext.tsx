@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type { IUser } from '../assets/assets';
 import api from '../configs/api';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextProps {
   isLoggedIn: boolean;
@@ -31,6 +32,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<IUser | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
+  const navigate = useNavigate();
+
   const signup = async ({
     name,
     email,
@@ -40,26 +43,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     email: string;
     password: string;
   }) => {
-    //   User input validation
-
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    const validateEmail = emailRegex.test(email);
-
-    if (!validateEmail) {
-      toast('Please enter a valid email address.');
-    }
-
-    const passwordRegex =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-
-    const validatePassword = passwordRegex.test(password);
-
-    if (!validatePassword) {
-      toast(
-        'Password must be at least 8 characters long and include at least one uppercase, lowercase, digits, and special characters.',
-      );
-    }
-
     try {
       const { data } = await api.post('/api/auth/register', {
         name,
@@ -112,6 +95,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoggedIn(false);
 
       toast.success(data.message);
+      navigate('/');
     } catch (error: any) {
       console.log(error);
       toast.error(error?.response?.data?.message || error.message);
