@@ -173,10 +173,9 @@ Aspect ratio: ${aspect_ratio || '16:9'}.`;
 
     const extension = extensionByType[contentType.split(';')[0]] || '.img';
 
-    const imageDirectory = path.join(process.cwd(), 'images');
+    const imageDirectory = path.join('/tmp', 'images');
 
-    //   create the image directory if it doesn't exist
-    fs.mkdirSync('images', { recursive: true });
+    fs.mkdirSync(imageDirectory, { recursive: true });
 
     fs.mkdirSync(imageDirectory, { recursive: true });
 
