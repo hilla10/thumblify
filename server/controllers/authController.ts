@@ -14,9 +14,15 @@ export const registerUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
     //   User input validation
+
+    if (!email || !name || !password) {
+      return res.status(400).json({
+        message: 'Please fill all the field and try again.',
+      });
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
     const validateEmail = emailRegex.test(email);
 

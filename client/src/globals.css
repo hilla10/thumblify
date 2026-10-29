@@ -17,10 +17,6 @@ button {
   @apply cursor-pointer;
 }
 
-a.active {
-  @apply text-pink-700;
-}
-
 .move-gradient {
   background-image: linear-gradient(
     to right,
@@ -29,6 +25,10 @@ a.active {
   );
   background-size: 200% 100%;
   animation: movegradient 5s infinite;
+}
+
+.navLink {
+  @apply relative px-4 py-1.5 rounded-full text-sm no-underline transition-all duration-200;
 }
 
 @keyframes movegradient {

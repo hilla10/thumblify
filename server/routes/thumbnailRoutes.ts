@@ -8,6 +8,6 @@ import protect from '../middlewares/auth.js';
 const thumbnailRouter = Router();
 
 thumbnailRouter.post('/generate', protect, generateThumbnail);
-thumbnailRouter.delete('/delete:id', protect, deleteThumbnail);
+thumbnailRouter.delete('/delete/:id', protect, deleteThumbnail);
 
 export default thumbnailRouter;

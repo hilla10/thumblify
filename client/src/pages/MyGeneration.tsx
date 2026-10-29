@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { dummyThumbnails, type IThumbnail } from '../assets/assets';
+import { type IThumbnail } from '../assets/assets';
 import SoftBackdrop from '../components/SoftBackdrop';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowUpRightIcon, DownloadIcon, TrashIcon } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import api from '../configs/api';
+import toast from 'react-hot-toast';
 
 const MyGeneration = () => {
   const aspectRatioClassMap: Record<string, string> = {
@@ -11,6 +14,8 @@ const MyGeneration = () => {
     '9:16': 'aspect-[9/16]',
   };
 
+  const { isLoggedIn } = useAuth();
+
   const navigate = useNavigate();
 
   const [thumbnails, setThumbnails] = useState<IThumbnail[]>([]);
@@ -18,28 +23,47 @@ const MyGeneration = () => {
 
   const fetchThumbnails = async () => {
     try {
-      setThumbnails(dummyThumbnails as unknown as IThumbnail[]);
-      setLoading(false);
-    } catch (error) {
+      setLoading(true);
+      const { data } = await api.get('/api/user/thumbnails');
+
+      setThumbnails(data.thumbnails || []);
+    } catch (error: any) {
       console.log(error);
+      toast.error(error?.response?.data?.message || error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDownload = (image_url: string) => {
-    window.open(image_url, '_blank');
+    const link = document.createElement('a');
+    link.href = image_url?.replace('/upload', '/upload/fl_attachment');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   const handleDelete = async (id: string) => {
     try {
-      console.log(id);
-    } catch (error) {
+      const confirm = window.confirm(
+        'Are you sure you want to delete this thumbnail?',
+      );
+      if (!confirm) return;
+      const { data } = await api.delete(`/api/thumbnail/delete/${id}`);
+
+      toast.success(data.message);
+      setThumbnails(thumbnails.filter((t) => t._id !== id));
+    } catch (error: any) {
       console.error(error);
+      toast.error(error?.response?.data?.message || error.message);
     }
   };
 
   useEffect(() => {
-    fetchThumbnails();
-  }, []);
+    if (isLoggedIn) {
+      fetchThumbnails();
+    }
+  }, [isLoggedIn]);
 
   return (
     <>
