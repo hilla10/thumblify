@@ -404,7 +404,7 @@ Then open a pull request on GitHub.
 
 ## License
 
-No license file was found in the repository, so the project license is currently not specified.
+This project is licensed under the [MIT License](./LICENSE).
 
 ## Author
 
