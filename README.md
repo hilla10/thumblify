@@ -373,10 +373,6 @@ Recommended follow-ups:
 - Verify `VITE_BASE_URL` points to the correct API origin.
 - Check if backend CORS includes your localhost or deployed frontend URL.
 
-## Testing
-
-No dedicated automated test suite is currently configured in this workspace. The project primarily relies on build and runtime verification rather than formal unit/integration tests.
-
 ## Roadmap
 
 Potential improvements for future iterations:
