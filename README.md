@@ -412,6 +412,7 @@ The project footer identifies the maintainer as "Haila" and the repository is ow
 
 - Repository: https://github.com/hilla10/thumblify
 - Live demo: https://thumblify-mpq1.vercel.app
+- LinkedIn: https://www.linkedin.com/in/hailemichaelnegusse
 
 ## Acknowledgements
 
